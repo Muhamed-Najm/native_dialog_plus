@@ -2,136 +2,300 @@ import Flutter
 import UIKit
 
 public class SwiftNativeDialogPlusPlugin: NSObject, FlutterPlugin {
-  public static func register(with registrar: FlutterPluginRegistrar) {
-    let channel = FlutterMethodChannel(
-      name: "native_dialog_plus", binaryMessenger: registrar.messenger())
-    let instance = SwiftNativeDialogPlusPlugin()
-    registrar.addMethodCallDelegate(instance, channel: channel)
-  }
 
-  public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    switch call.method {
-    case "showDialog":
-      let exception = tryBlock {
-        self.showDialog(call, result)
-      }
-      if exception != nil {
-        result(FlutterError(code: "DIALOG_ERROR", message: exception!.reason, details: nil))
-        return
-      }
-    default:
-      result(FlutterMethodNotImplemented)
-    }
-  }
+    // MARK: - Register
 
-  private var controller: UIViewController? {
-    return UIApplication.shared.keyWindow?.rootViewController
-  }
+    public static func register(with registrar: FlutterPluginRegistrar) {
 
-  private var okText: String {
-    return NSLocalizedString("OK", comment: "OK")
-  }
+        let channel = FlutterMethodChannel(
+            name: "native_dialog_plus",
+            binaryMessenger: registrar.messenger()
+        )
 
-  private var cancelText: String {
-    return NSLocalizedString("Cancel", comment: "Cancel")
-  }
+        let instance = SwiftNativeDialogPlusPlugin()
 
-  private var unavailableError: FlutterError {
-    return FlutterError(code: "UNAVAILABLE", message: "Native alert is unavailable", details: nil)
-  }
-  private var invalidStyleError: FlutterError {
-    return FlutterError(
-      code: "INVALID_STYLE", message: "Given index for style is invalid", details: nil)
-  }
-
-  private func indexToActionStyle(_ index: Int) -> UIAlertAction.Style? {
-    switch index {
-    case 0:
-      return .default
-    case 1:
-      return .cancel
-    case 2:
-      return .destructive
-    default:
-      return nil
-    }
-  }
-
-  private func indexToAlertStyle(_ index: Int) -> UIAlertController.Style? {
-    switch index {
-    case 0:
-      return .actionSheet
-    case 1:
-      return .alert
-    default:
-      return nil
-    }
-  }
-
-  private func showDialog(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
-    let args = call.arguments as! NSDictionary
-    let title = args.value(forKey: "title") as? String ?? nil
-    let message = args.value(forKey: "message") as? String ?? nil
-    let style = args.value(forKey: "style") as! Int
-
-    var alertStyle = indexToAlertStyle(style)
-    if alertStyle == nil {
-      result(invalidStyleError)
-      return
+        registrar.addMethodCallDelegate(instance, channel: channel)
     }
 
-    // Check if the device is an iPad and the style is .actionSheet
-    // .actionSheet is not supported on iPadOS since 13.2
-    if UIDevice.current.userInterfaceIdiom == .pad && alertStyle == .actionSheet {
-      alertStyle = .alert
+    // MARK: - Handle
+
+    public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+
+        if call.method == "showDialog" {
+            showDialog(call, result)
+        } else {
+            result(FlutterMethodNotImplemented)
+        }
     }
 
-    let alert = UIAlertController(title: title, message: message, preferredStyle: alertStyle!)
-    
-    // Set fixed font sizes for title and message
-    if let title = title {
-      let titleFont = UIFont.systemFont(ofSize: 17, weight: .semibold)
-      let attributedTitle = NSAttributedString(
-        string: title,
-        attributes: [NSAttributedString.Key.font: titleFont]
-      )
-      alert.setValue(attributedTitle, forKey: "attributedTitle")
-    }
-    
-    if let message = message {
-      let messageFont = UIFont.systemFont(ofSize: 13, weight: .regular)
-      let attributedMessage = NSAttributedString(
-        string: message,
-        attributes: [NSAttributedString.Key.font: messageFont]
-      )
-      alert.setValue(attributedMessage, forKey: "attributedMessage")
+    // MARK: - Controller
+
+    private var rootController: UIViewController? {
+        return UIApplication.shared
+            .connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?
+            .windows
+            .first { $0.isKeyWindow }?
+            .rootViewController
     }
 
-    let actions = args.value(forKey: "actions") as! [NSDictionary]
+    // MARK: - Dialog
 
-    for (index, action) in actions.enumerated() {
-      let title = action.value(forKey: "text") as! String
-      let enabled = action.value(forKey: "enabled") as! Bool
+    private func showDialog(
+        _ call: FlutterMethodCall,
+        _ result: @escaping FlutterResult
+    ) {
 
-      var actionStyle = indexToActionStyle(action.value(forKey: "style") as! Int)
-      if actionStyle == nil {
-        result(invalidStyleError)
-        return
-      }
+        guard let args = call.arguments as? NSDictionary else {
+            result(FlutterError(
+                code: "INVALID_ARGS",
+                message: "Arguments are invalid",
+                details: nil
+            ))
+            return
+        }
 
-      let alertAction = UIAlertAction(
-        title: title, style: actionStyle!,
-        handler: { _ in
-          result(index)
-        })
-      alertAction.isEnabled = enabled
-      alert.addAction(alertAction)
+        let title = args["title"] as? String ?? ""
+        let message = args["message"] as? String ?? ""
+        let actions = args["actions"] as? [NSDictionary] ?? []
+
+        guard let controller = rootController else {
+            result(FlutterError(
+                code: "NO_CONTROLLER",
+                message: "Root controller not found",
+                details: nil
+            ))
+            return
+        }
+
+        let dialog = CustomDialogVC(
+            titleText: title,
+            messageText: message,
+            actions: actions
+        ) { index in
+            result(index)
+        }
+
+        dialog.modalPresentationStyle = .overFullScreen
+        dialog.modalTransitionStyle = .crossDissolve
+
+        controller.present(dialog, animated: true)
+    }
+}
+
+// =======================================================
+// MARK: - Custom Dialog Controller
+// =======================================================
+
+fileprivate class CustomDialogVC: UIViewController {
+
+    private let titleText: String
+    private let messageText: String
+    private let actions: [NSDictionary]
+    private let callback: (Int) -> Void
+
+    // MARK: Init
+
+    init(
+        titleText: String,
+        messageText: String,
+        actions: [NSDictionary],
+        callback: @escaping (Int) -> Void
+    ) {
+
+        self.titleText = titleText
+        self.messageText = messageText
+        self.actions = actions
+        self.callback = callback
+
+        super.init(nibName: nil, bundle: nil)
+
+        modalPresentationStyle = .overFullScreen
     }
 
-    guard let controller = controller else {
-      result(unavailableError)
-      return
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) not supported")
     }
-    controller.present(alert, animated: true)
-  }
+
+    // MARK: UI
+
+    private let dimView = UIView()
+    private let container = UIView()
+
+    private let titleLabel = UILabel()
+    private let messageLabel = UILabel()
+    private let buttonsStack = UIStackView()
+
+    // MARK: Lifecycle
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+
+        setupBackground()
+        setupContainer()
+        setupLabels()
+        setupButtons()
+        layoutUI()
+        animateIn()
+    }
+
+    // MARK: Setup
+
+    private func setupBackground() {
+
+        dimView.backgroundColor = UIColor.black.withAlphaComponent(0.4)
+        dimView.alpha = 0
+
+        view.addSubview(dimView)
+
+        dimView.translatesAutoresizingMaskIntoConstraints = false
+
+        NSLayoutConstraint.activate([
+            dimView.topAnchor.constraint(equalTo: view.topAnchor),
+            dimView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            dimView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            dimView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+        ])
+    }
+
+    private func setupContainer() {
+
+        container.backgroundColor = .systemBackground
+        container.layer.cornerRadius = 16
+        container.clipsToBounds = true
+
+        view.addSubview(container)
+
+        container.translatesAutoresizingMaskIntoConstraints = false
+
+        NSLayoutConstraint.activate([
+            container.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            container.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            container.widthAnchor.constraint(equalToConstant: 300),
+        ])
+    }
+
+    private func setupLabels() {
+
+        // Title
+
+        titleLabel.text = titleText
+        titleLabel.textAlignment = .center
+        titleLabel.numberOfLines = 2
+
+        titleLabel.font = .systemFont(ofSize: 18, weight: .semibold)
+        titleLabel.adjustsFontForContentSizeCategory = false
+
+
+        // Message
+
+        messageLabel.text = messageText
+        messageLabel.textAlignment = .center
+        messageLabel.numberOfLines = 4
+
+        messageLabel.font = .systemFont(ofSize: 14)
+        messageLabel.adjustsFontForContentSizeCategory = false
+    }
+
+    private func setupButtons() {
+
+        buttonsStack.axis = .vertical
+        buttonsStack.spacing = 1
+        buttonsStack.distribution = .fillEqually
+
+        buttonsStack.backgroundColor = .separator
+
+        for (index, item) in actions.enumerated() {
+
+            let title = item["text"] as? String ?? "OK"
+            let enabled = item["enabled"] as? Bool ?? true
+            let style = item["style"] as? Int ?? 0
+
+            let button = UIButton(type: .system)
+
+            button.tag = index
+
+            button.setTitle(title, for: .normal)
+            button.isEnabled = enabled
+
+            button.titleLabel?.font = .systemFont(ofSize: 16)
+            button.titleLabel?.adjustsFontForContentSizeCategory = false
+
+            switch style {
+            case 2: // destructive
+                button.setTitleColor(.systemRed, for: .normal)
+            default:
+                button.setTitleColor(.systemBlue, for: .normal)
+            }
+
+            button.backgroundColor = .systemBackground
+
+            button.heightAnchor.constraint(equalToConstant: 48).isActive = true
+
+            button.addTarget(
+                self,
+                action: #selector(buttonTapped(_:)),
+                for: .touchUpInside
+            )
+
+            buttonsStack.addArrangedSubview(button)
+        }
+    }
+
+    private func layoutUI() {
+
+        let contentStack = UIStackView()
+
+        contentStack.axis = .vertical
+        contentStack.spacing = 12
+        contentStack.alignment = .fill
+
+        contentStack.addArrangedSubview(titleLabel)
+        contentStack.addArrangedSubview(messageLabel)
+
+        container.addSubview(contentStack)
+        container.addSubview(buttonsStack)
+
+        contentStack.translatesAutoresizingMaskIntoConstraints = false
+        buttonsStack.translatesAutoresizingMaskIntoConstraints = false
+
+        NSLayoutConstraint.activate([
+
+            // Content
+
+            contentStack.topAnchor.constraint(equalTo: container.topAnchor, constant: 20),
+            contentStack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            contentStack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+
+            // Buttons
+
+            buttonsStack.topAnchor.constraint(equalTo: contentStack.bottomAnchor, constant: 20),
+            buttonsStack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            buttonsStack.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            buttonsStack.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
+    }
+
+    // MARK: Actions
+
+    @objc private func buttonTapped(_ sender: UIButton) {
+
+        dismiss(animated: true) {
+            self.callback(sender.tag)
+        }
+    }
+
+    // MARK: Animation
+
+    private func animateIn() {
+
+        dimView.alpha = 0
+        container.transform = CGAffineTransform(scaleX: 1.1, y: 1.1)
+
+        UIView.animate(withDuration: 0.25) {
+            self.dimView.alpha = 1
+            self.container.transform = .identity
+        }
+    }
 }
