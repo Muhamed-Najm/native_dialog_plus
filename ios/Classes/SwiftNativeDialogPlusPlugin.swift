@@ -1,10 +1,13 @@
 import Flutter
 import UIKit
 
+// =======================================================
+// MARK: - Flutter Plugin
+// =======================================================
+
 public class SwiftNativeDialogPlusPlugin: NSObject, FlutterPlugin {
 
-    // MARK: - Register
-
+    // Register
     public static func register(with registrar: FlutterPluginRegistrar) {
 
         let channel = FlutterMethodChannel(
@@ -13,13 +16,14 @@ public class SwiftNativeDialogPlusPlugin: NSObject, FlutterPlugin {
         )
 
         let instance = SwiftNativeDialogPlusPlugin()
-
         registrar.addMethodCallDelegate(instance, channel: channel)
     }
 
-    // MARK: - Handle
-
-    public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    // Handle calls
+    public func handle(
+        _ call: FlutterMethodCall,
+        result: @escaping FlutterResult
+    ) {
 
         if call.method == "showDialog" {
             showDialog(call, result)
@@ -28,11 +32,10 @@ public class SwiftNativeDialogPlusPlugin: NSObject, FlutterPlugin {
         }
     }
 
-    // MARK: - Controller
-
+    // Root controller
     private var rootController: UIViewController? {
-        return UIApplication.shared
-            .connectedScenes
+
+        UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .first?
             .windows
@@ -40,8 +43,7 @@ public class SwiftNativeDialogPlusPlugin: NSObject, FlutterPlugin {
             .rootViewController
     }
 
-    // MARK: - Dialog
-
+    // Show dialog
     private func showDialog(
         _ call: FlutterMethodCall,
         _ result: @escaping FlutterResult
@@ -50,7 +52,7 @@ public class SwiftNativeDialogPlusPlugin: NSObject, FlutterPlugin {
         guard let args = call.arguments as? NSDictionary else {
             result(FlutterError(
                 code: "INVALID_ARGS",
-                message: "Arguments are invalid",
+                message: "Invalid arguments",
                 details: nil
             ))
             return
@@ -63,7 +65,7 @@ public class SwiftNativeDialogPlusPlugin: NSObject, FlutterPlugin {
         guard let controller = rootController else {
             result(FlutterError(
                 code: "NO_CONTROLLER",
-                message: "Root controller not found",
+                message: "No root controller",
                 details: nil
             ))
             return
@@ -90,13 +92,21 @@ public class SwiftNativeDialogPlusPlugin: NSObject, FlutterPlugin {
 
 fileprivate class CustomDialogVC: UIViewController {
 
+    // Data
     private let titleText: String
     private let messageText: String
     private let actions: [NSDictionary]
     private let callback: (Int) -> Void
 
-    // MARK: Init
+    // UI
+    private let dimView = UIView()
+    private let container = UIView()
 
+    private let titleLabel = UILabel()
+    private let messageLabel = UILabel()
+    private let buttonsStack = UIStackView()
+
+    // Init
     init(
         titleText: String,
         messageText: String,
@@ -115,20 +125,10 @@ fileprivate class CustomDialogVC: UIViewController {
     }
 
     required init?(coder: NSCoder) {
-        fatalError("init(coder:) not supported")
+        fatalError("init(coder:) not implemented")
     }
 
-    // MARK: UI
-
-    private let dimView = UIView()
-    private let container = UIView()
-
-    private let titleLabel = UILabel()
-    private let messageLabel = UILabel()
-    private let buttonsStack = UIStackView()
-
-    // MARK: Lifecycle
-
+    // Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -140,11 +140,13 @@ fileprivate class CustomDialogVC: UIViewController {
         animateIn()
     }
 
-    // MARK: Setup
+    // ===================================================
+    // MARK: Setup UI
+    // ===================================================
 
     private func setupBackground() {
 
-        dimView.backgroundColor = UIColor.black.withAlphaComponent(0.4)
+        dimView.backgroundColor = UIColor.black.withAlphaComponent(0.45)
         dimView.alpha = 0
 
         view.addSubview(dimView)
@@ -179,23 +181,27 @@ fileprivate class CustomDialogVC: UIViewController {
     private func setupLabels() {
 
         // Title
-
         titleLabel.text = titleText
         titleLabel.textAlignment = .center
         titleLabel.numberOfLines = 2
 
         titleLabel.font = .systemFont(ofSize: 18, weight: .semibold)
+
+        // Disable scaling
         titleLabel.adjustsFontForContentSizeCategory = false
+        titleLabel.preferredFontForTextStyle = nil
 
 
         // Message
-
         messageLabel.text = messageText
         messageLabel.textAlignment = .center
         messageLabel.numberOfLines = 4
 
         messageLabel.font = .systemFont(ofSize: 14)
+
+        // Disable scaling
         messageLabel.adjustsFontForContentSizeCategory = false
+        messageLabel.preferredFontForTextStyle = nil
     }
 
     private func setupButtons() {
@@ -214,16 +220,36 @@ fileprivate class CustomDialogVC: UIViewController {
 
             let button = UIButton(type: .system)
 
-            button.tag = index
+            // Disable iOS15+ auto config
+            if #available(iOS 15.0, *) {
+                button.configuration = nil
+            }
 
-            button.setTitle(title, for: .normal)
+            button.tag = index
             button.isEnabled = enabled
 
-            button.titleLabel?.font = .systemFont(ofSize: 16)
-            button.titleLabel?.adjustsFontForContentSizeCategory = false
+            button.setTitle(title, for: .normal)
 
+            // Fixed font
+            let fixedFont = UIFont.systemFont(ofSize: 16)
+
+            if let label = button.titleLabel {
+
+                label.font = fixedFont
+
+                // FULLY disable scaling
+                label.adjustsFontForContentSizeCategory = false
+                label.preferredFontForTextStyle = nil
+                label.adjustsFontSizeToFitWidth = false
+                label.minimumScaleFactor = 1.0
+
+                label.setContentHuggingPriority(.required, for: .vertical)
+                label.setContentCompressionResistancePriority(.required, for: .vertical)
+            }
+
+            // Color
             switch style {
-            case 2: // destructive
+            case 2:
                 button.setTitleColor(.systemRed, for: .normal)
             default:
                 button.setTitleColor(.systemBlue, for: .normal)
@@ -231,7 +257,10 @@ fileprivate class CustomDialogVC: UIViewController {
 
             button.backgroundColor = .systemBackground
 
-            button.heightAnchor.constraint(equalToConstant: 48).isActive = true
+            // Fixed height
+            button.heightAnchor
+                .constraint(equalToConstant: 48)
+                .isActive = true
 
             button.addTarget(
                 self,
@@ -263,21 +292,44 @@ fileprivate class CustomDialogVC: UIViewController {
         NSLayoutConstraint.activate([
 
             // Content
+            contentStack.topAnchor.constraint(
+                equalTo: container.topAnchor,
+                constant: 20
+            ),
 
-            contentStack.topAnchor.constraint(equalTo: container.topAnchor, constant: 20),
-            contentStack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-            contentStack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            contentStack.leadingAnchor.constraint(
+                equalTo: container.leadingAnchor,
+                constant: 16
+            ),
+
+            contentStack.trailingAnchor.constraint(
+                equalTo: container.trailingAnchor,
+                constant: -16
+            ),
 
             // Buttons
+            buttonsStack.topAnchor.constraint(
+                equalTo: contentStack.bottomAnchor,
+                constant: 20
+            ),
 
-            buttonsStack.topAnchor.constraint(equalTo: contentStack.bottomAnchor, constant: 20),
-            buttonsStack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            buttonsStack.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            buttonsStack.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            buttonsStack.leadingAnchor.constraint(
+                equalTo: container.leadingAnchor
+            ),
+
+            buttonsStack.trailingAnchor.constraint(
+                equalTo: container.trailingAnchor
+            ),
+
+            buttonsStack.bottomAnchor.constraint(
+                equalTo: container.bottomAnchor
+            ),
         ])
     }
 
+    // ===================================================
     // MARK: Actions
+    // ===================================================
 
     @objc private func buttonTapped(_ sender: UIButton) {
 
@@ -286,7 +338,9 @@ fileprivate class CustomDialogVC: UIViewController {
         }
     }
 
+    // ===================================================
     // MARK: Animation
+    // ===================================================
 
     private func animateIn() {
 
@@ -294,6 +348,7 @@ fileprivate class CustomDialogVC: UIViewController {
         container.transform = CGAffineTransform(scaleX: 1.1, y: 1.1)
 
         UIView.animate(withDuration: 0.25) {
+
             self.dimView.alpha = 1
             self.container.transform = .identity
         }
