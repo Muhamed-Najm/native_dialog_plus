@@ -87,6 +87,25 @@ public class SwiftNativeDialogPlusPlugin: NSObject, FlutterPlugin {
     }
 
     let alert = UIAlertController(title: title, message: message, preferredStyle: alertStyle!)
+    
+    // Set fixed font sizes for title and message
+    if let title = title {
+      let titleFont = UIFont.systemFont(ofSize: 17, weight: .semibold)
+      let attributedTitle = NSAttributedString(
+        string: title,
+        attributes: [NSAttributedString.Key.font: titleFont]
+      )
+      alert.setValue(attributedTitle, forKey: "attributedTitle")
+    }
+    
+    if let message = message {
+      let messageFont = UIFont.systemFont(ofSize: 13, weight: .regular)
+      let attributedMessage = NSAttributedString(
+        string: message,
+        attributes: [NSAttributedString.Key.font: messageFont]
+      )
+      alert.setValue(attributedMessage, forKey: "attributedMessage")
+    }
 
     let actions = args.value(forKey: "actions") as! [NSDictionary]
 
@@ -107,7 +126,6 @@ public class SwiftNativeDialogPlusPlugin: NSObject, FlutterPlugin {
         })
       alertAction.isEnabled = enabled
       alert.addAction(alertAction)
-
     }
 
     guard let controller = controller else {
@@ -116,5 +134,4 @@ public class SwiftNativeDialogPlusPlugin: NSObject, FlutterPlugin {
     }
     controller.present(alert, animated: true)
   }
-
 }

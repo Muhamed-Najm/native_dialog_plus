@@ -45,7 +45,6 @@ class NativeDialogPlusPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
 
                 if (buttons != null) {                    
                     val buttonConfigs = buttons.mapIndexed { index, button ->
-                        //println(button["style"])
                         val text = button["text"] as String
                         val style = button["style"] as Int
                         NativeDialogPlusAction(text, style) {
@@ -53,8 +52,7 @@ class NativeDialogPlusPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
                         }
                     }
 
-                 
-                    //Show ActionSheet or AlertDialog based on style
+                    // Show ActionSheet or AlertDialog based on style
                     if (styleShow == 0) {
                         // ActionSheet style for Android
                         showActionSheet(title, buttonConfigs, result)
@@ -66,9 +64,6 @@ class NativeDialogPlusPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
                 } else {
                     result.error("INVALID_ARGUMENT", "Buttons argument is missing or invalid", null)
                 }
-                
-                
-               
             }
             else -> {
                 result.notImplemented()
@@ -97,63 +92,65 @@ class NativeDialogPlusPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
     }
 
     private fun showActionSheet(
-    title: String,
-    actions: List<NativeDialogPlusAction>,
-    result: Result
-) {
-    val bottomSheetDialog = BottomSheetDialog(activity ?: throw NullPointerException(), R.style.NativeDialogStyle)
-    
-    // Inflate custom layout for BottomSheetDialog
-    val view = LayoutInflater.from(activity).inflate(R.layout.action_sheet_layout, null)
-    
-    // Set white background for the dialog
-    view.setBackgroundColor(Color.WHITE)
-    
-    // Set title if available
-    val titleView: TextView = view.findViewById(R.id.title)
-    if (title.isNotEmpty()) {
-        titleView.text = title
-        titleView.visibility = View.VISIBLE
-        titleView.setPadding(8, 8, 8, 8)
-        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-        titleView.setTextColor(Color.GRAY)
-    }
-
-    // Set actions (buttons) dynamically based on the list provided
-    val actionContainer: LinearLayout = view.findViewById(R.id.action_container)
-    actions.forEachIndexed { index, action ->
-        val button = Button(activity).apply {
-            text = action.text
-            textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-            gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
-            setOnClickListener {
-                result.success(index)
-                bottomSheetDialog.dismiss()
-            }
-            
-            setBackgroundResource(R.drawable.rounded_button)
-           
-            val layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            
-            setTextColor(Color.BLACK)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            paint.isFakeBoldText = true
-            
-            this.layoutParams = layoutParams
+        title: String,
+        actions: List<NativeDialogPlusAction>,
+        result: Result
+    ) {
+        val bottomSheetDialog = BottomSheetDialog(activity ?: throw NullPointerException(), R.style.NativeDialogStyle)
+        
+        // Inflate custom layout for BottomSheetDialog
+        val view = LayoutInflater.from(activity).inflate(R.layout.action_sheet_layout, null)
+        
+        // Set white background for the dialog
+        view.setBackgroundColor(Color.WHITE)
+        
+        // Set title if available
+        val titleView: TextView = view.findViewById(R.id.title)
+        if (title.isNotEmpty()) {
+            titleView.text = title
+            titleView.visibility = View.VISIBLE
+            titleView.setPadding(8, 8, 8, 8)
+            // Use COMPLEX_UNIT_PX instead of SP to ignore system font scaling
+            titleView.setTextSize(TypedValue.COMPLEX_UNIT_PX, 16f * activity!!.resources.displayMetrics.density)
+            titleView.setTextColor(Color.GRAY)
         }
-        actionContainer.addView(button)
-    }
 
-    // Set transparent background for BottomSheetDialog
-    bottomSheetDialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-    
-    // Set content view and show the dialog
-    bottomSheetDialog.setContentView(view)
-    bottomSheetDialog.show()
-}
+        // Set actions (buttons) dynamically based on the list provided
+        val actionContainer: LinearLayout = view.findViewById(R.id.action_container)
+        actions.forEachIndexed { index, action ->
+            val button = Button(activity).apply {
+                text = action.text
+                textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+                gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
+                setOnClickListener {
+                    result.success(index)
+                    bottomSheetDialog.dismiss()
+                }
+                
+                setBackgroundResource(R.drawable.rounded_button)
+               
+                val layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+                
+                setTextColor(Color.BLACK)
+                // Use COMPLEX_UNIT_PX instead of SP to ignore system font scaling
+                setTextSize(TypedValue.COMPLEX_UNIT_PX, 13f * activity!!.resources.displayMetrics.density)
+                paint.isFakeBoldText = true
+                
+                this.layoutParams = layoutParams
+            }
+            actionContainer.addView(button)
+        }
+
+        // Set transparent background for BottomSheetDialog
+        bottomSheetDialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        
+        // Set content view and show the dialog
+        bottomSheetDialog.setContentView(view)
+        bottomSheetDialog.show()
+    }
 
 
     private fun showDialog(
@@ -188,21 +185,25 @@ class NativeDialogPlusPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
 
         alertDialog.show()
 
-        // for future implementations this is how to set button colors
-        // import
-        // import android.graphics.Color
-        // import android.widget.Button
-        
-        // val negativeButton: Button? = alertDialog.getButton(AlertDialog.BUTTON_NEGATIVE)
-        // negativeButton?.setTextColor(Color.RED)
+        // Fix font sizes for alert dialog buttons and text
+        alertDialog.window?.decorView?.let { decorView ->
+            fixTextViewFontSizes(decorView)
+        }
+    }
 
-        // val positiveButton: Button? = alertDialog.getButton(AlertDialog.BUTTON_POSITIVE)
-        // positiveButton?.setTextColor(Color.GREEN)
-
-        // val neutralButton: Button? = alertDialog.getButton(AlertDialog.BUTTON_NEUTRAL)
-        // neutralButton?.setTextColor(Color.BLUE)
+    // Helper function to recursively fix all TextView font sizes in a view hierarchy
+    private fun fixTextViewFontSizes(view: View) {
+        if (view is TextView) {
+            // Get current text size in pixels
+            val currentSize = view.textSize
+            // Set it back using COMPLEX_UNIT_PX to ignore font scaling
+            view.setTextSize(TypedValue.COMPLEX_UNIT_PX, currentSize)
+        } else if (view is android.view.ViewGroup) {
+            for (i in 0 until view.childCount) {
+                fixTextViewFontSizes(view.getChildAt(i))
+            }
+        }
     }
 
     data class NativeDialogPlusAction(val text: String, val style: Int, val onPressed: () -> Unit)
-
 }
