@@ -107,41 +107,14 @@ public class SwiftNativeDialogPlusPlugin: NSObject, FlutterPlugin {
         })
       alertAction.isEnabled = enabled
       alert.addAction(alertAction)
+
     }
 
     guard let controller = controller else {
       result(unavailableError)
       return
     }
-    
-    controller.present(alert, animated: true) {
-      // After presentation, fix all text fonts to ignore dynamic type
-      self.fixFontsInView(alert.view)
-    }
+    controller.present(alert, animated: true)
   }
-  
-  // Recursively fix fonts in all text elements
-  private func fixFontsInView(_ view: UIView) {
-    if let label = view as? UILabel {
-      // Disable dynamic type adjustment
-      label.adjustsFontForContentSizeCategory = false
-      // Keep the current font but recreate it to lock the size
-      let currentSize = label.font.pointSize
-      let currentWeight = label.font.fontDescriptor.object(forKey: .traits) as? [UIFontDescriptor.TraitKey: Any]
-      let weight = (currentWeight?[.weight] as? NSNumber)?.doubleValue ?? 0.0
-      
-      if weight >= UIFont.Weight.semibold.rawValue {
-        label.font = UIFont.systemFont(ofSize: currentSize, weight: .semibold)
-      } else if weight >= UIFont.Weight.medium.rawValue {
-        label.font = UIFont.systemFont(ofSize: currentSize, weight: .medium)
-      } else {
-        label.font = UIFont.systemFont(ofSize: currentSize, weight: .regular)
-      }
-    }
-    
-    // Recursively process all subviews
-    for subview in view.subviews {
-      fixFontsInView(subview)
-    }
-  }
+
 }
