@@ -125,15 +125,6 @@ public class SwiftNativeDialogPlusPlugin: NSObject, FlutterPlugin {
           result(index)
         })
       alertAction.isEnabled = enabled
-      
-      // Set fixed font size for action button
-      let actionFont = UIFont.systemFont(ofSize: 17, weight: .regular)
-      let attributedTitle = NSAttributedString(
-        string: title,
-        attributes: [NSAttributedString.Key.font: actionFont]
-      )
-      alertAction.setValue(attributedTitle, forKey: "attributedTitle")
-      
       alert.addAction(alertAction)
     }
 
@@ -141,6 +132,39 @@ public class SwiftNativeDialogPlusPlugin: NSObject, FlutterPlugin {
       result(unavailableError)
       return
     }
-    controller.present(alert, animated: true)
+    
+    controller.present(alert, animated: true) {
+      // After presentation, traverse the view hierarchy and fix button fonts
+      self.fixAlertActionFonts(in: alert.view)
+    }
+  }
+  
+  // Recursively traverse view hierarchy to find and fix button/label fonts
+  private func fixAlertActionFonts(in view: UIView) {
+    // Fix labels (action button titles)
+    if let label = view as? UILabel {
+      let currentSize = label.font.pointSize
+      label.font = UIFont.systemFont(ofSize: currentSize, weight: label.font.weight)
+      label.adjustsFontForContentSizeCategory = false
+    }
+    
+    // Recursively check subviews
+    for subview in view.subviews {
+      fixAlertActionFonts(in: subview)
+    }
+  }
 }
+
+// Extension to get font weight
+extension UIFont {
+  var weight: Weight {
+    guard let weightNumber = traits[.weight] as? NSNumber else { return .regular }
+    let weightRawValue = CGFloat(weightNumber.doubleValue)
+    let weight = Weight(rawValue: weightRawValue)
+    return weight
+  }
+  
+  private var traits: [UIFontDescriptor.TraitKey: Any] {
+    return fontDescriptor.object(forKey: .traits) as? [UIFontDescriptor.TraitKey: Any] ?? [:]
+  }
 }
