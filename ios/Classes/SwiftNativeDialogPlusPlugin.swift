@@ -87,25 +87,6 @@ public class SwiftNativeDialogPlusPlugin: NSObject, FlutterPlugin {
     }
 
     let alert = UIAlertController(title: title, message: message, preferredStyle: alertStyle!)
-    
-    // Set fixed font sizes for title and message
-    if let title = title {
-      let titleFont = UIFont.systemFont(ofSize: 17, weight: .semibold)
-      let attributedTitle = NSAttributedString(
-        string: title,
-        attributes: [NSAttributedString.Key.font: titleFont]
-      )
-      alert.setValue(attributedTitle, forKey: "attributedTitle")
-    }
-    
-    if let message = message {
-      let messageFont = UIFont.systemFont(ofSize: 13, weight: .regular)
-      let attributedMessage = NSAttributedString(
-        string: message,
-        attributes: [NSAttributedString.Key.font: messageFont]
-      )
-      alert.setValue(attributedMessage, forKey: "attributedMessage")
-    }
 
     let actions = args.value(forKey: "actions") as! [NSDictionary]
 
@@ -134,37 +115,33 @@ public class SwiftNativeDialogPlusPlugin: NSObject, FlutterPlugin {
     }
     
     controller.present(alert, animated: true) {
-      // After presentation, traverse the view hierarchy and fix button fonts
-      self.fixAlertActionFonts(in: alert.view)
+      // After presentation, fix all text fonts to ignore dynamic type
+      self.fixFontsInView(alert.view)
     }
   }
   
-  // Recursively traverse view hierarchy to find and fix button/label fonts
-  private func fixAlertActionFonts(in view: UIView) {
-    // Fix labels (action button titles)
+  // Recursively fix fonts in all text elements
+  private func fixFontsInView(_ view: UIView) {
     if let label = view as? UILabel {
-      let currentSize = label.font.pointSize
-      label.font = UIFont.systemFont(ofSize: currentSize, weight: label.font.weight)
+      // Disable dynamic type adjustment
       label.adjustsFontForContentSizeCategory = false
+      // Keep the current font but recreate it to lock the size
+      let currentSize = label.font.pointSize
+      let currentWeight = label.font.fontDescriptor.object(forKey: .traits) as? [UIFontDescriptor.TraitKey: Any]
+      let weight = (currentWeight?[.weight] as? NSNumber)?.doubleValue ?? 0.0
+      
+      if weight >= UIFont.Weight.semibold.rawValue {
+        label.font = UIFont.systemFont(ofSize: currentSize, weight: .semibold)
+      } else if weight >= UIFont.Weight.medium.rawValue {
+        label.font = UIFont.systemFont(ofSize: currentSize, weight: .medium)
+      } else {
+        label.font = UIFont.systemFont(ofSize: currentSize, weight: .regular)
+      }
     }
     
-    // Recursively check subviews
+    // Recursively process all subviews
     for subview in view.subviews {
-      fixAlertActionFonts(in: subview)
+      fixFontsInView(subview)
     }
-  }
-}
-
-// Extension to get font weight
-extension UIFont {
-  var weight: Weight {
-    guard let weightNumber = traits[.weight] as? NSNumber else { return .regular }
-    let weightRawValue = CGFloat(weightNumber.doubleValue)
-    let weight = Weight(rawValue: weightRawValue)
-    return weight
-  }
-  
-  private var traits: [UIFontDescriptor.TraitKey: Any] {
-    return fontDescriptor.object(forKey: .traits) as? [UIFontDescriptor.TraitKey: Any] ?? [:]
   }
 }
